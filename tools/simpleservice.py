@@ -82,15 +82,20 @@ async def run(local_addr, multicast_addr, port):
     sd_prot.start()
 
     try:
-        while True:
+        for i in range(3):
             await asyncio.sleep(3)
+            print("waiting a bit")
+
     except asyncio.CancelledError:
         pass
     finally:
-        sd_prot.stop()
-        sd_trsp_u.close()
-        sd_trsp_m.close()
+        #sd_prot.stop()
+        #sd_trsp_u.close()
+        #sd_trsp_m.close()
+        prot.stop_announce(sd_prot.announcer)
         prot.stop()
+        print("stopped service, waiting 3s")
+        await asyncio.sleep(3)
 
 
 def setup_log(fmt="", **kwargs):
