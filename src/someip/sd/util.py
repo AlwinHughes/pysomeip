@@ -1,5 +1,8 @@
 import socket
 import typing
+import ipaddress
+
+from someip.config import _T_SOCKNAME as _T_SOCKADDR
 
 _T_IPADDR = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
 

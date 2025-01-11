@@ -2,23 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import typing
+import random
 
 import someip.header
 import someip.config
 
-from sd_protocol import ServiceDiscoveryProtocol
-from service_instance import ServiceInstance
-from send_collector import SendCollector
+from .service_instance import ServiceInstance
+from .send_collector import SendCollector
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
-from event_group_sub import EventGroupSubscription
-from util import format_address
+from .event_group_sub import EventgroupSubscription
+from .interfaces import IServiceAnnouncer
+from .interfaces import IServiceDiscoveryProtocol
+from .util import format_address
 
 
 _T_OPT_SOCKADDR = typing.Optional[_T_SOCKADDR]
 
-class ServiceAnnouncer:
+class ServiceAnnouncer(IServiceAnnouncer):
     # TODO doc
-    def __init__(self, sd: ServiceDiscoveryProtocol):
+    def __init__(self, sd: IServiceDiscoveryProtocol):
         self.sd = sd
         self.timings = sd.timings
         self.log = sd.log.getChild("announce")

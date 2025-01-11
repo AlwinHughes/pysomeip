@@ -19,10 +19,10 @@ import someip.config
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
 from someip.utils import log_exceptions, wait_cancelled
 
-from interfaces import IServiceDiscoveryProtocol
-from interfaces import ClientServiceListener
-
-from timed_store import TimedStore
+from .interfaces import IServiceDiscoveryProtocol
+from .interfaces import ClientServiceListener
+from .timed_store import TimedStore
+from .auto_subscriber import AutoSubscribeServiceListener
 
 LOG = logging.getLogger("someip.sd")
 _T_IPADDR = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]

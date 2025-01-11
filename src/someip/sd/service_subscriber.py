@@ -19,7 +19,8 @@ import someip.config
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
 from someip.utils import log_exceptions, wait_cancelled
 
-from interfaces import IServiceDiscoveryProtocol
+from .interfaces import IServiceDiscoveryProtocol
+from .timings import TTL_FOREVER 
 
 LOG = logging.getLogger("someip.sd")
 _T_IPADDR = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]

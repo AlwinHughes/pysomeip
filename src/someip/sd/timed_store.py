@@ -9,7 +9,7 @@ import someip.header
 import someip.config
 
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
-from timing import TTL_FOREVER
+from .timings import TTL_FOREVER
 
 KT = typing.TypeVar("KT")
 _T_CALLBACK = typing.Callable[[KT, _T_SOCKADDR], None]

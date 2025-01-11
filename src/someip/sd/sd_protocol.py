@@ -18,6 +18,8 @@ import someip.header
 import someip.config
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
 from someip.utils import log_exceptions, wait_cancelled
+from .util import ip_address, pack_addr_v4, pack_addr_v6, format_address
+from .timings import Timings
 
 LOG = logging.getLogger("someip.sd")
 _T_IPADDR = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -26,7 +28,10 @@ _T_OPT_SOCKADDR = typing.Optional[_T_SOCKADDR]
 from someip.protocol import SOMEIPDatagramProtocol
 from someip.protocol import DatagramProtocolAdapter
 
-from interfaces import IServiceDiscoveryProtocol
+from .interfaces import IServiceDiscoveryProtocol
+from .service_discover import ServiceDiscover
+from .service_announcer import ServiceAnnouncer 
+from .service_subscriber import ServiceSubscriber
 
 class ServiceDiscoveryProtocol(IServiceDiscoveryProtocol):
     @classmethod
@@ -201,7 +206,7 @@ class ServiceDiscoveryProtocol(IServiceDiscoveryProtocol):
 
         prot.transport = trsp_u
 
-       return trsp_u, trsp_m, prot
+        return trsp_u, trsp_m, prot
 
     def __init__(
         self,

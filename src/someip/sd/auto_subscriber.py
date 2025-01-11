@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
 import someip.header
 import someip.config
 
-from interfaces import IClientServiceListener
-from service_subscriber import ServiceSubscriber
+from .interfaces import IClientServiceListener
+from .service_subscriber import ServiceSubscriber
 
 
 """

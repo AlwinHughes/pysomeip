@@ -19,9 +19,14 @@ import someip.config
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
 _T_OPT_SOCKADDR = typing.Optional[_T_SOCKADDR]
 
+from .session_storage import _SessionStorage
+from .datagram_protocol_adapter import DatagramProtocolAdapter
+
+from .interfaces import ISOMEIPDatagramProtocol
+
 #from sd.py
 # needs: _SessionStorage
-class SOMEIPDatagramProtocol:
+class SOMEIPDatagramProtocol(ISOMEIPDatagramProtocol):
     """
     is actually not a subclass of asyncio.BaseProtocol or asyncio.DatagramProtocol,
     because datagram_received() has an additional parameter `multicast: bool`
@@ -31,6 +36,7 @@ class SOMEIPDatagramProtocol:
 
     @classmethod
     async def create_unicast_endpoint(
+# _T_OPT_SOCKADDR = typing.Optional[_T_SOCKADDR]
         cls,
         *args,
         local_addr: _T_OPT_SOCKADDR = None,

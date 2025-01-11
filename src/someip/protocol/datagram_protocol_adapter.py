@@ -19,10 +19,10 @@ import someip.config
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
 _T_OPT_SOCKADDR = typing.Optional[_T_SOCKADDR]
 
-from someip_datagram_protocol import SOMEIPDatagramProtocol
+from .interfaces import ISOMEIPDatagramProtocol
 
 class DatagramProtocolAdapter(asyncio.DatagramProtocol):
-    def __init__(self, protocol: SOMEIPDatagramProtocol, is_multicast: bool):
+    def __init__(self, protocol: ISOMEIPDatagramProtocol, is_multicast: bool):
         self.is_multicast = is_multicast
         self.protocol = protocol
 
