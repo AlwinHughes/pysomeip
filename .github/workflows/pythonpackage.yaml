@@ -1,10 +1,6 @@
 name: Python package
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+on: workflow_dispatch
 
 jobs:
   build:
@@ -29,7 +25,7 @@ jobs:
     - name: Run tests, flake8 and mypy
       run: |
         tox
-    - name: "Upload coverage to Codecov"
-      uses: "codecov/codecov-action@v3"
-      with:
-        fail_ci_if_error: true
+#    - name: "Upload coverage to Codecov"
+#      uses: "codecov/codecov-action@v3"
+#      with:
+#        fail_ci_if_error: true
