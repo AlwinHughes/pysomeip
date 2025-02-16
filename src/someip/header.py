@@ -27,7 +27,7 @@ SD_SERVICE = 0xFFFF
 SD_METHOD = 0x8100
 SD_INTERFACE_VERSION = 1
 TP_FLAG = 0x20
-MAX_PAYLOAD_SIZE = 1400
+MAX_PAYLOAD_SIZE = 1392
 
 
 class ParseError(RuntimeError):
@@ -99,6 +99,18 @@ class SOMEIPHeader:
     """
 
     __format: typing.ClassVar[struct.Struct] = struct.Struct("!HHIHHBBBB")
+    """
+    1 H  service id
+    2 H  method id
+    3 I length (off all proceeding sutff
+    4 H client id
+    5 H sesision id
+    6 B protoco version
+    7 B interface version
+    8 B message type
+    9 B Return Code
+    10 .. th reset
+    """
     service_id: int
     method_id: int
     client_id: int
@@ -240,6 +252,19 @@ class SOMEIPTPHeader(SOMEIPHeader):
     __format: typing.ClassVar[struct.Struct] = struct.Struct("!HHIHHBBBB")
     TP_STRUCT: typing.ClassVar[StructLikeBitstruct] = StructLikeBitstruct("u28p3b1")
 
+    """
+    1 H service id
+    2 H method id
+    3 I length (off all proceeding sutff
+    4 H client id
+    5 H sesision id
+    6 B protoco version
+    7 B interface version
+    8 B message type
+    9 B Return Code
+    10 .. th reset
+    """
+
     offset: int = 0
     more_segments: bool = False
 
@@ -370,6 +395,7 @@ class SOMEIPTPHeader(SOMEIPHeader):
         :raises struct.error: if any attribute was out of range for serialization
         :return: the byte representation
         """
+        #      payload size + size(request id)=4 + size(version)=4
         size = len(self.payload) + 8 + self.TP_STRUCT.size
         tp_hdr = self.TP_STRUCT.pack(self.offset, self.more_segments)
 

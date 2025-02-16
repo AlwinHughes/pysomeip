@@ -86,10 +86,11 @@ class SimpleEventgroup:
                 payload=payload,
             )
 
-            msgbuf += hdr.build()
+            self.service.send_msg(hdr, addr)
+            #msgbuf += hdr.build()
 
-        if msgbuf:
-            self.service.send(msgbuf, addr)
+        #if msgbuf:
+        #    self.service.send(msgbuf, addr)
 
     @utils.log_exceptions()
     async def _notify_all(self, events: typing.Iterable[int], label: str):
@@ -338,7 +339,7 @@ class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
             return_code=return_code,
             payload=b"",
         )
-        self.send(resp.build(), addr)
+        self.send_msg(resp, addr)
 
     def send_positive_response(
         self,
@@ -346,10 +347,16 @@ class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
         addr: header._T_SOCKNAME,
         payload: bytes = b"",
     ) -> None:
-        resp = dataclasses.replace(
-            msg, message_type=header.SOMEIPMessageType.RESPONSE, payload=payload
-        )
-        self.send(resp.build(), addr)
+        resp  = None
+        if len(payload) <= header.MAX_PAYLOAD_SIZE:
+            resp = dataclasses.replace(
+                    msg, message_type=header.SOMEIPMessageType.RESPONSE, payload=payload
+                    )
+        else: 
+            resp = dataclasses.replace(
+                    msg, message_type=header.SOMEIPMessageType.TP_RESPONSE, payload=payload)
+
+        self.send_msg(resp, addr)
 
     def client_subscribed(
         self,

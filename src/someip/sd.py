@@ -57,7 +57,7 @@ def segment_msg(
     """Split a SOME/IP message into multiple SOME/IP-TP messages."""
     bytes_sent = 0
     offset = 0
-    max_len = (max_payload_size - SOMEIPTPHeader.TP_STRUCT.size) // 16 * 16
+    max_len = (max_payload_size) // 16 * 16
     message_type = someip.header.SOMEIPMessageType(msg.message_type.value | TP_FLAG)
     data = msg.payload
     original_payload_len = len(data)
@@ -228,11 +228,18 @@ class SOMEIPDatagramProtocol:
 
     def send_msg(self, msg: someip.header.SOMEIPHeader, remote: _T_OPT_SOCKADDR = None):
         """Send a SOME/IP message or split it into multiple SOME/IP-TP messages."""
+        self.log.warn(f"max payload size: {MAX_PAYLOAD_SIZE}")
+        self.log.warn(f"len: {len(msg.payload)}")
         if len(msg.payload) <= MAX_PAYLOAD_SIZE:
             self.send(msg.build(), remote)
         else:
-            for msg in segment_msg(msg):
-                self.send(msg.build(), remote)
+            for index, m in enumerate(segment_msg(msg)):
+                self.log.error(f"transmitting tp segment {index}")
+                self.log.error(f"{m.build().hex()}")
+                print(f"transmitting tp segment {index}")
+                print(f"{m.build().hex()}")
+                print("############################################")
+                self.send(m.build(), remote)
 
 
 class DatagramProtocolAdapter(asyncio.DatagramProtocol):
