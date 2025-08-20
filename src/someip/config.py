@@ -140,6 +140,17 @@ class Service:
     major_version: int = 0xFF
     minor_version: int = 0xFFFFFFFF
 
+
+    #def __init__(self, service_id : int, instance_id : int = 0x0FFFF, major_ver: int = 0xFF, minor_version: int = 0xFFFFFFFF, reliable: bool = False): 
+    #    print("service config created")
+    #    self.service_id = service_id
+    #    self.instance_id = instance_id 
+    #    self.major_version = major_ver
+    #    self.minor_version = minor_ver
+    #    self.reliable = reliable
+    #    #self.options_1 = 
+    
+
     options_1: typing.Tuple[someip.header.SOMEIPSDOption, ...] = dataclasses.field(
         default=(), compare=False
     )

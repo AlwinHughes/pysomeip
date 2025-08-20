@@ -48,6 +48,118 @@ def format_address(addr: _T_SOCKADDR) -> str:
     else:  # pragma: nocover
         raise NotImplementedError(f"unknown ip address format: {addr!r} -> {ip!r}")
 
+class SOMEIPTCPServerProtocol(asyncio.Protocol):
+
+    def __init__(self, logger: str = "someip-tcp"): 
+        self.log = logging.getLogger(logger)
+        self.transport: asyncio.DatagramTransport
+        self.session_storage = _SessionStorage()
+
+
+    @classmethod
+    async def create_unicast_endpoint(
+        cls,
+        local_addr: _T_OPT_SOCKADDR,
+        loop=None,
+        *args,
+        **kwargs,
+    ):
+        if loop is None:  # pragma: nobranch
+            loop = asyncio.get_event_loop()
+        protocol = cls(*args, **kwargs)
+        transport = await loop.create_server(
+                SOMEIPTCPServerProtocol,
+                local_addr[0], local_addr[1]
+                )
+        protocol.transport = transport
+        return transport, protocol
+    
+
+    def data_received(self, data):
+        #print(data)
+        #message = data.decode()
+        print(f"data recived: {data}")
+        parsed, data = someip.header.SOMEIPHeader.parse(data)
+        self.message_received(parsed)
+
+
+    def message_received(
+        self,
+        someip_message: someip.header.SOMEIPHeader,
+    ) -> None:  # pragma: nocover
+        """
+        called when a well-formed SOME/IP datagram was received
+        """
+        self.log.info("received %s", someip_message)
+        pass
+
+    def connection_made(self, transport):
+        print("server connection made")
+
+    def connection_lost(self, transport):
+        print("server connection lost")
+
+    def close_transport(self):
+        self.transport.close()
+
+
+    def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
+        self.transport.write(buf)
+
+class SOMEIPTCPClient:
+
+    def __init__(self, logger: str = "someip-tcp"): 
+        self.log = logging.getLogger(logger)
+        self.transport: asyncio.DatagramTransport
+        self.session_storage = _SessionStorage()
+
+
+    @classmethod
+    async def create_unicast_endpoint(
+        cls,
+        #local_addr: _T_OPT_SOCKADDR,
+        remote_addr: _T_OPT_SOCKADDR,
+        loop=None,
+        *args,
+        **kwargs,
+    ):
+        if loop is None:  # pragma: nobranch
+            loop = asyncio.get_event_loop()
+        #protocol = cls(*args, **kwargs)
+        transport, protocol = await loop.create_connection(
+                lambda: SOMEIPTCPClient(),
+                remote_addr[0], remote_addr[1]
+                )
+        protocol.transport = transport
+        return transport, protocol
+    
+    def connection_made(self, transport):
+        print("client connection made")
+
+    def connection_lost(self, transport):
+        print("client connection lost")
+
+    def data_received(self, data):
+        message = data.decode()
+        print("data recived: {message}")
+        parsed, data = someip.header.SOMEIPHeader.parse(data)
+        self.message_received(parsed, addr, multicast)
+
+    def eof_received(self):
+        print("eof received")
+
+    def message_received(
+        self,
+        someip_message: someip.header.SOMEIPHeader,
+        addr: _T_SOCKADDR,
+        multicast: bool,
+    ) -> None:  # pragma: nocover
+        """
+        called when a well-formed SOME/IP datagram was received
+        """
+        self.log.info("received from %s\n%s", format_address(addr), someip_message)
+        pass
+
 
 class SOMEIPDatagramProtocol:
     """
@@ -1095,6 +1207,7 @@ class ServiceInstance:
         listener: ServerServiceListener,
         announcer: ServiceAnnouncer,
         timings: Timings,
+        reliable : bool = False
     ):
         self.service = service
         self.listener = listener
