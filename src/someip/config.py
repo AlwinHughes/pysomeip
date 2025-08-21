@@ -139,6 +139,7 @@ class Service:
     instance_id: int = 0xFFFF
     major_version: int = 0xFF
     minor_version: int = 0xFFFFFFFF
+    reliable: bool = False
 
 
     #def __init__(self, service_id : int, instance_id : int = 0x0FFFF, major_ver: int = 0xFF, minor_version: int = 0xFFFFFFFF, reliable: bool = False): 
@@ -186,6 +187,19 @@ class Service:
             and self.minor_version != entry.service_minor_version
         ):
             return False
+
+        print("self")
+        print(self)
+
+        print("options_1")
+        print(entry.options_1)
+
+        if not any([ 
+                    not bool(option.l4proto == someip.header.L4Protocols.TCP ^ self.reliable) for option in entry.options_1 if isinstance(option, someip.header.IPv4EndpointOption) or isinstance(option, someip.header.IPv6EndpointOption)
+                    ]):
+            print("reliability didn't match")
+            return False 
+
         return True
 
     def matches_find(self, entry: someip.header.SOMEIPSDEntry) -> bool:
@@ -323,7 +337,7 @@ class Service:
         )
 
         return (
-            f"service=0x{self.service_id:04x}, instance=0x{self.instance_id:04x},"
+                f"service=0x{self.service_id:04x}, instance=0x{self.instance_id:04x}, reliable: {self.reliable}"
             f" version={version}, options_1=[{s_options_1}], options_2=[{s_options_2}]"
         )
 

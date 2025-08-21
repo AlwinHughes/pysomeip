@@ -50,7 +50,7 @@ async def run2():
     )
 
     event = asyncio.Event()
-    config = someip.config.Service(0xAAAA)
+    config = someip.config.Service(0xAAAA, reliable=False)
     m = Monitor(event)
     protocol.discovery.watch_service(config, m)
 

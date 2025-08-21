@@ -36,7 +36,8 @@ async def run():
 
 async def run2():
     #local_addr = "127.0.0.1"
-    local_addr = "192.168.155.39"
+    
+    local_addr = "192.168.44.235"
     multicast_addr = "229.168.110.1"
     service_port = 5555
 
@@ -49,7 +50,7 @@ async def run2():
 
     
 
-    config = someip.config.Service(0xAAAA, options_1=[someip.header.IPv4EndpointOption(address=ipaddress.ip_address(local_addr), l4proto=someip.header.L4Protocols.TCP, port=service_port)])
+    config = someip.config.Service(0xAAAA, options_1=[someip.header.IPv4EndpointOption(address=ipaddress.ip_address(local_addr), l4proto=someip.header.L4Protocols.TCP, port=service_port)], reliable=True)
     instance = ServiceInstance(config, ServerServiceListener(), protocol.announcer, Timings)
 
     protocol.announcer.announce_service(instance)
