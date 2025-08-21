@@ -14,10 +14,11 @@ import struct
 import threading
 import typing
 
-import someip.header
 import someip.config
+import someip.header
 from someip.config import _T_SOCKNAME as _T_SOCKADDR
-from someip.utils import log_exceptions, wait_cancelled
+from someip.utils import log_exceptions
+from someip.utils import wait_cancelled
 
 LOG = logging.getLogger("someip.sd")
 _T_IPADDR = typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
@@ -48,13 +49,12 @@ def format_address(addr: _T_SOCKADDR) -> str:
     else:  # pragma: nocover
         raise NotImplementedError(f"unknown ip address format: {addr!r} -> {ip!r}")
 
-class SOMEIPTCPServerProtocol(asyncio.Protocol):
 
-    def __init__(self, logger: str = "someip-tcp"): 
+class SOMEIPTCPServerProtocol(asyncio.Protocol):
+    def __init__(self, logger: str = "someip-tcp"):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
-
 
     @classmethod
     async def create_unicast_endpoint(
@@ -68,20 +68,17 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
             loop = asyncio.get_event_loop()
         protocol = cls(*args, **kwargs)
         transport = await loop.create_server(
-                SOMEIPTCPServerProtocol,
-                local_addr[0], local_addr[1]
-                )
+            SOMEIPTCPServerProtocol, local_addr[0], local_addr[1]
+        )
         protocol.transport = transport
         return transport, protocol
-    
 
     def data_received(self, data):
-        #print(data)
-        #message = data.decode()
+        # print(data)
+        # message = data.decode()
         print(f"data recived: {data}")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
         self.message_received(parsed)
-
 
     def message_received(
         self,
@@ -102,22 +99,20 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
     def close_transport(self):
         self.transport.close()
 
-
     def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
         self.transport.write(buf)
 
-class SOMEIPTCPClient:
 
-    def __init__(self, logger: str = "someip-tcp"): 
+class SOMEIPTCPClient:
+    def __init__(self, logger: str = "someip-tcp"):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
 
-
     @classmethod
     async def create_unicast_endpoint(
         cls,
-        #local_addr: _T_OPT_SOCKADDR,
+        # local_addr: _T_OPT_SOCKADDR,
         remote_addr: _T_OPT_SOCKADDR,
         loop=None,
         *args,
@@ -125,14 +120,13 @@ class SOMEIPTCPClient:
     ):
         if loop is None:  # pragma: nobranch
             loop = asyncio.get_event_loop()
-        #protocol = cls(*args, **kwargs)
+        # protocol = cls(*args, **kwargs)
         transport, protocol = await loop.create_connection(
-                lambda: SOMEIPTCPClient(),
-                remote_addr[0], remote_addr[1]
-                )
+            lambda: SOMEIPTCPClient(), remote_addr[0], remote_addr[1]
+        )
         protocol.transport = transport
         return transport, protocol
-    
+
     def connection_made(self, transport):
         print("client connection made")
 
@@ -149,16 +143,39 @@ class SOMEIPTCPClient:
         print("eof received")
 
     def message_received(
-        self,
-        someip_message: someip.header.SOMEIPHeader,
-        addr: _T_SOCKADDR,
-        multicast: bool,
+        self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
     ) -> None:  # pragma: nocover
         """
         called when a well-formed SOME/IP datagram was received
         """
         self.log.info("received from %s\n%s", format_address(addr), someip_message)
         pass
+
+
+class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
+    def __init__(
+        self,
+        callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
+        logger: str = "someip-tcp",
+    ):
+        self.log = logging.getLogger(logger)
+        self.transport: asyncio.DatagramTransport
+        self.session_storage = _SessionStorage()
+        self.callback: typing.Callable[
+            [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
+        ] = callback
+
+        # default_addr=None means use connected address from socket
+        self.default_addr: _T_OPT_SOCKADDR = None
+
+    def message_received(
+        self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
+    ) -> None:  # pragma: nocover
+        """
+        called when a well-formed SOME/IP datagram was received
+        """
+        self.log.info("received from %s\n%s", format_address(addr), someip_message)
+        self.callback(someip_message, addr, False)
 
 
 class SOMEIPDatagramProtocol:
@@ -248,6 +265,35 @@ class SOMEIPDatagramProtocol:
         self.transport.sendto(buf, remote)
 
 
+class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
+    def __init__(
+        self,
+        callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
+        logger: str = "someip",
+    ):
+        self.log = logging.getLogger(logger)
+        self.transport: asyncio.DatagramTransport
+        self.session_storage = _SessionStorage()
+        self.callback: typing.Callable[
+            [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
+        ] = callback
+
+        # default_addr=None means use connected address from socket
+        self.default_addr: _T_OPT_SOCKADDR = None
+
+    def message_received(
+        self,
+        someip_message: someip.header.SOMEIPHeader,
+        addr: _T_SOCKADDR,
+        multicast: bool,
+    ) -> None:  # pragma: nocover
+        """
+        called when a well-formed SOME/IP datagram was received
+        """
+        self.log.info("received from %s\n%s", format_address(addr), someip_message)
+        self.callback(someip_message, addr, multicast)
+
+
 class DatagramProtocolAdapter(asyncio.DatagramProtocol):
     def __init__(self, protocol: SOMEIPDatagramProtocol, is_multicast: bool):
         self.is_multicast = is_multicast
@@ -270,9 +316,9 @@ class DatagramProtocolAdapter(asyncio.DatagramProtocol):
 class _SessionStorage:
     def __init__(self):
         self.incoming = {}
-        self.outgoing: typing.DefaultDict[
-            _T_OPT_SOCKADDR, typing.Tuple[bool, int]
-        ] = collections.defaultdict(lambda: (True, 1))
+        self.outgoing: typing.DefaultDict[_T_OPT_SOCKADDR, typing.Tuple[bool, int]] = (
+            collections.defaultdict(lambda: (True, 1))
+        )
         self.outgoing_lock = threading.Lock()
 
     def check_received(
@@ -342,7 +388,6 @@ class ServiceDiscoveryProtocol(SOMEIPDatagramProtocol):
         multicast_interface: typing.Optional[str] = None,
         ttl: int = 1,
     ):
-
         if family not in (socket.AF_INET, socket.AF_INET6):
             raise ValueError("only IPv4 and IPv6 supported, got {family!r}")
 
@@ -643,9 +688,7 @@ class ServiceDiscoveryProtocol(SOMEIPDatagramProtocol):
                 continue
 
             if entry.sd_type == someip.header.SOMEIPSDEntryType.FindService:
-                self.announcer.handle_findservice(
-                    entry, addr, multicast
-                )
+                self.announcer.handle_findservice(entry, addr, multicast)
                 continue
 
             if (  # pragma: nobranch
@@ -819,13 +862,11 @@ class ServiceSubscriber:
 class ClientServiceListener:
     def service_offered(
         self, service: someip.config.Service, source: _T_SOCKADDR
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def service_stopped(
         self, service: someip.config.Service, source: _T_SOCKADDR
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1072,7 +1113,7 @@ class ServiceDiscover:
 
         for i in range(self.timings.REPETITIONS_MAX):
             await asyncio.sleep(
-                (2 ** i) * self.timings.REPETITIONS_BASE_DELAY
+                (2**i) * self.timings.REPETITIONS_BASE_DELAY
             )  # 4.2.1: SWS_SD_00363
 
             find_entries = _build_entries()
@@ -1136,9 +1177,9 @@ class EventgroupSubscription:
     id: int
     counter: int
     ttl: int = dataclasses.field(compare=False)
-    endpoints: typing.FrozenSet[
-        someip.header.EndpointOption[typing.Any]
-    ] = dataclasses.field(default_factory=frozenset)
+    endpoints: typing.FrozenSet[someip.header.EndpointOption[typing.Any]] = (
+        dataclasses.field(default_factory=frozenset)
+    )
     options: typing.Tuple[someip.header.SOMEIPSDOption, ...] = dataclasses.field(
         default_factory=tuple, compare=False
     )
@@ -1193,8 +1234,7 @@ class ServerServiceListener:
 
     def client_unsubscribed(
         self, subscription: EventgroupSubscription, source: _T_SOCKADDR
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 _T_SL = typing.Tuple[someip.config.Service, ServerServiceListener]
@@ -1207,7 +1247,7 @@ class ServiceInstance:
         listener: ServerServiceListener,
         announcer: ServiceAnnouncer,
         timings: Timings,
-        reliable : bool = False
+        reliable: bool = False,
     ):
         self.service = service
         self.listener = listener
@@ -1269,7 +1309,7 @@ class ServiceInstance:
         try:
             self._can_answer_offers = True
             for i in range(self.timings.REPETITIONS_MAX):
-                await asyncio.sleep((2 ** i) * self.timings.REPETITIONS_BASE_DELAY)
+                await asyncio.sleep((2**i) * self.timings.REPETITIONS_BASE_DELAY)
                 self._send_offer()
 
             if not self.timings.CYCLIC_OFFER_DELAY:  # 4.2.1 SWS_SD_00451
@@ -1432,7 +1472,6 @@ class ServiceAnnouncer:
         entry: someip.header.SOMEIPSDEntry,
         addr: _T_SOCKADDR,
     ) -> None:
-
         matching_services = []
 
         for instance in self.announcing_services:

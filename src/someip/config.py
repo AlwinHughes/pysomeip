@@ -3,6 +3,7 @@ Classes for defining a :class:`Service` or :class:`Eventgroup`.
 These definitions will be used to match against, and to convert to SD service or
 eventgroup entries as seen on the wire (see :class:`someip.header.SOMEIPSDEntry`).
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -141,16 +142,14 @@ class Service:
     minor_version: int = 0xFFFFFFFF
     reliable: bool = False
 
-
-    #def __init__(self, service_id : int, instance_id : int = 0x0FFFF, major_ver: int = 0xFF, minor_version: int = 0xFFFFFFFF, reliable: bool = False): 
+    # def __init__(self, service_id : int, instance_id : int = 0x0FFFF, major_ver: int = 0xFF, minor_version: int = 0xFFFFFFFF, reliable: bool = False):
     #    print("service config created")
     #    self.service_id = service_id
-    #    self.instance_id = instance_id 
+    #    self.instance_id = instance_id
     #    self.major_version = major_ver
     #    self.minor_version = minor_ver
     #    self.reliable = reliable
-    #    #self.options_1 = 
-    
+    #    #self.options_1 =
 
     options_1: typing.Tuple[someip.header.SOMEIPSDOption, ...] = dataclasses.field(
         default=(), compare=False
@@ -193,12 +192,17 @@ class Service:
 
         print("options_1")
         print(entry.options_1)
+        a = [
+            not bool((option.l4proto == someip.header.L4Protocols.TCP) ^ self.reliable)
+            for option in entry.options_1
+            if isinstance(option, someip.header.IPv4EndpointOption)
+            or isinstance(option, someip.header.IPv6EndpointOption)
+        ]
+        print(a)
 
-        if not any([ 
-                    not bool(option.l4proto == someip.header.L4Protocols.TCP ^ self.reliable) for option in entry.options_1 if isinstance(option, someip.header.IPv4EndpointOption) or isinstance(option, someip.header.IPv6EndpointOption)
-                    ]):
+        if not any(a):
             print("reliability didn't match")
-            return False 
+            return False
 
         return True
 
@@ -337,7 +341,7 @@ class Service:
         )
 
         return (
-                f"service=0x{self.service_id:04x}, instance=0x{self.instance_id:04x}, reliable: {self.reliable}"
+            f"service=0x{self.service_id:04x}, instance=0x{self.instance_id:04x}, reliable: {self.reliable}"
             f" version={version}, options_1=[{s_options_1}], options_2=[{s_options_2}]"
         )
 

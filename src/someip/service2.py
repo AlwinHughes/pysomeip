@@ -1,22 +1,14 @@
-"""
-Simple service implementation. Probably lacking a few things, such as multicast
-eventgroups and more than basic option handling.
-
-See ``tools/simpleservice.py`` for a basic usage example.
-"""
 from __future__ import annotations
 
 import asyncio
 import collections
 import dataclasses
 import functools
-import typing
 import warnings
+import typing
+import logging
 
-from someip import config
-from someip import header
-from someip import sd
-from someip import utils
+from someip import header, config, sd, utils
 
 
 _T_METHOD_HANDLER = typing.Callable[
@@ -26,9 +18,6 @@ _T_METHOD_HANDLER = typing.Callable[
 
 class MalformedMessageError(Exception):
     pass
-
-
-# TODO implement multicast events
 
 
 class SimpleEventgroup:
@@ -154,12 +143,20 @@ class SimpleEventgroup:
             self.has_clients.clear()
 
 
-class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
-    service_id: typing.ClassVar[int]
-    version_major: typing.ClassVar[int]
-    version_minor: typing.ClassVar[int]
+class SimpleService2(sd.ServerServiceListener):
 
-    def __init__(self, instance_id: int, reliable: bool = False):
+    service_id: typing.ClassVar[int] = 0xAAAA
+    version_major: typing.ClassVar[int] = 1
+    version_minor: typing.ClassVar[int] = 1
+
+    def __init__(
+            self,
+            instance_id: int, 
+            #protocol : typeing.Union[sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol],
+            announcer: sd.ServiceAnnouncer,
+            reliable: bool = False,
+            **kwargs
+            ):
         """
         override, call super().__init__() followed by :meth:`register_method`
         and :meth:`register_cyclic_eventgroup`
@@ -171,8 +168,41 @@ class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
         self.eventgroups: typing.Dict[int, SimpleEventgroup] = {}
         self.methods: typing.Dict[int, _T_METHOD_HANDLER] = {}
         self.instance_id: int = instance_id
-        self.log = self.log.getChild(f"service-{self.service_id:04x}-{instance_id:04x}")
+        self.log = logging.getLogger("service2")
         self.reliable: bool = reliable
+        self.prot : typeing.Union[sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol, None] = None
+        self.transport = None
+
+
+    @classmethod
+    async def start(
+        cls,
+        instance_id: int,
+        announcer: sd.ServiceAnnouncer,
+        local_addr: sd._T_OPT_SOCKADDR = None,
+        reliable : bool = False,
+        **kwargs,
+    ):
+
+        self = cls(instance_id, announcer, reliable)
+
+        if reliable:
+            trans, prot = await sd.PassUpSOMEIPTCPServer.create_unicast_endpoint(
+                    local_addr=local_addr,
+                    callback=self.message_received,
+                    **kwargs)
+            self.prot = prot
+            self.transport = trans
+        else:
+            trans, prot = await sd.PassUpSOMEIPDatagramProtocol.create_unicast_endpoint(
+                    local_addr=local_addr,
+                    callback = self.message_received,
+                    **kwargs)
+            self.prot = prot
+            self.transport = trans
+        self.start_announce(announcer)
+        return self
+
 
     def register_method(self, id: int, handler: _T_METHOD_HANDLER) -> None:
         """
@@ -205,8 +235,12 @@ class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
 
     @functools.cached_property
     def _endpoint(self) -> header.SOMEIPSDOption:
-        sockname = self.transport.get_extra_info("sockname")
-        return config.Eventgroup._sockaddr_to_endpoint(sockname, header.L4Protocols.UDP)
+        if self.reliable:
+            sockname = self.transport.sockets[0].getsockname()
+            return config.Eventgroup._sockaddr_to_endpoint(sockname, header.L4Protocols.TCP)
+        else: 
+            sockname = self.transport.get_extra_info("sockname")
+            return config.Eventgroup._sockaddr_to_endpoint(sockname, header.L4Protocols.UDP)
 
     def as_config(self):
         return config.Service(
@@ -216,29 +250,10 @@ class SimpleService(sd.SOMEIPDatagramProtocol, sd.ServerServiceListener):
             self.version_minor,
             options_1=(self._endpoint,),
             eventgroups=frozenset(self.eventgroups.keys()),
+            reliable = self.reliable
         )
 
 
-    @classmethod
-    async def start_datagram_endpoint(
-        cls,
-        instance_id: int,
-        announcer: sd.ServiceAnnouncer,
-        local_addr: sd._T_OPT_SOCKADDR = None,
-    ):  # pragma: nocover
-        """
-        create a unicast datagram endpoint for this service and register it with
-        the service discovery announcer.
-
-        :param instance_id: the service instance ID for this service
-        :param announcer: the SD protocol instance that will announce this service
-        :param local_addr: a local address to bind to (default: any)
-        """
-        _, prot = await cls.create_unicast_endpoint(instance_id, local_addr=local_addr)
-
-        prot.start_announce(announcer)
-
-        return prot
 
     def start_announce(self, announcer: sd.ServiceAnnouncer):
         self.service_instance = sd.ServiceInstance(

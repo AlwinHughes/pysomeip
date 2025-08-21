@@ -5,8 +5,8 @@ import asyncio
 import dataclasses
 import enum
 import ipaddress
-import struct
 import socket
+import struct
 import typing
 
 try:
