@@ -51,10 +51,15 @@ def format_address(addr: _T_SOCKADDR) -> str:
 
 
 class SOMEIPTCPServerProtocol(asyncio.Protocol):
+
+    ip_to_protocol = dict()
+
     def __init__(self, logger: str = "someip-tcp"):
+    #def __init__(self, logger: str = "someip-tcp"):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
+        #self.log.info("TCP server init")
 
     @classmethod
     async def create_unicast_endpoint(
@@ -68,21 +73,31 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
             loop = asyncio.get_event_loop()
         protocol = cls(*args, **kwargs)
         transport = await loop.create_server(
-            SOMEIPTCPServerProtocol, local_addr[0], local_addr[1]
+            lambda : cls(*args, **kwargs),
+            local_addr[0], local_addr[1]
         )
+        protocol.log.info(f"init transport: {transport}")
         protocol.transport = transport
         return transport, protocol
 
     def data_received(self, data):
-        # print(data)
-        # message = data.decode()
-        print(f"data recived: {data}")
+        self.log.info("TCP server data received")
+        #self.log.info(f"TCP server data received self {self}")
+        #self.log.info(f"TCP server self: {dir(self)}")
+        #self.log.info(f"TCP server data trans: {self.conn_trans}")
+        #self.log.info(f"transport {self.transport}")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
-        self.message_received(parsed)
+
+        self.log.info(f"TCP server data received sock_name : {self.conn_trans.get_extra_info('sockname')}")
+        self.log.info(f"TCP server data received peer_name : {self.conn_trans.get_extra_info('peername')}")
+        self.message_received(parsed, self.conn_trans.get_extra_info("sockname"), False)
+        #self.message_received(parsed, self.transport.sockets[0].laddr, False)
 
     def message_received(
         self,
         someip_message: someip.header.SOMEIPHeader,
+        addr: _T_SOCKADDR,
+        multicast: bool
     ) -> None:  # pragma: nocover
         """
         called when a well-formed SOME/IP datagram was received
@@ -91,16 +106,37 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         pass
 
     def connection_made(self, transport):
-        print("server connection made")
+        self.log.info(f"server connection made t2: {transport}")
+        self.log.info(f"server connection socket name : {transport.get_extra_info('sockname')}")
+        self.log.info(f"server connection peer name  : {transport.get_extra_info('peername')}")
+
+        self.ip_to_protocol[transport.get_extra_info("sockname")] = transport
+        self.ip_to_protocol[transport.get_extra_info("peername")] = transport
+        self.conn_trans = transport
 
     def connection_lost(self, transport):
-        print("server connection lost")
+        #self.log.info(f"server connection lost: {transport.get_extra_info('sockname')}")
+        self.log.info(f"server connection lost")
+        #self.ip_to_protocol.pop(transport.get_extra_info("sockname"))
 
     def close_transport(self):
         self.transport.close()
 
     def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
-        self.transport.write(buf)
+        #self.log.info(f"send self self: {self}")
+        self.log.info(f"ip_to_proto: {self.ip_to_protocol}")
+        #self.log.info(f"TTransport: {self.transport}")
+        #self.log.info(f"TTransport dir: {dir(self.transport)}")
+        #self.log.info(f"TTransport sockets: {self.transport.sockets[0]}")
+        #self.log.info(f"TTransport sockets dir: {dir(self.transport.sockets[0])}")
+        if remote is None:
+            self.log.warn("remote addr is None, not sending")
+            return
+        self.log.warn(f"remote addr is {remote}")
+        self.ip_to_protocol[remote].write(buf)
+        #self.transport.sockets[0].write(buf)
+        #self.transport.write(buf)
+        #self.transport2.write(buf)
 
 
 class SOMEIPTCPClient:
@@ -129,6 +165,7 @@ class SOMEIPTCPClient:
 
     def connection_made(self, transport):
         print("client connection made")
+        self.transport = transport
 
     def connection_lost(self, transport):
         print("client connection lost")
@@ -148,34 +185,76 @@ class SOMEIPTCPClient:
         """
         called when a well-formed SOME/IP datagram was received
         """
-        self.log.info("received from %s\n%s", format_address(addr), someip_message)
+        self.log.info("tcp received from %s\n%s", format_address(addr), someip_message)
         pass
 
 
 class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
-    def __init__(
-        self,
-        callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
-        logger: str = "someip-tcp",
-    ):
+
+    def __init__(self, callback, logger: str = "someip-tcp", **kwargs):
+    #def __init__(self, logger: str = "someip-tcp", **kwargs):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
+        self.log.info("TCP pass up server init")
+
         self.callback: typing.Callable[
             [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
         ] = callback
 
-        # default_addr=None means use connected address from socket
-        self.default_addr: _T_OPT_SOCKADDR = None
 
     def message_received(
-        self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
+        self,
+        someip_message: someip.header.SOMEIPHeader,
+        addr: _T_SOCKADDR,
+        multicast: bool
     ) -> None:  # pragma: nocover
         """
         called when a well-formed SOME/IP datagram was received
         """
-        self.log.info("received from %s\n%s", format_address(addr), someip_message)
-        self.callback(someip_message, addr, False)
+        self.log.info("received %s", someip_message)
+        self.callback(someip_message, addr, multicast)
+
+
+    def close_transport(self):
+        print("close transport")
+        #self.transport.close()
+
+    #def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
+    #    self.transport.write(buf)
+    #def __init__(
+    #    self,
+    #    callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
+    #  #  logger: str = "someip-tcp",
+    #    *args,
+    #    **kwargs
+    #):
+    #    #self.log = logging.getLogger(logger)
+    #    #self.transport: asyncio.DatagramTransport
+    #    #self.session_storage = _SessionStorage()
+    #    super().__init__()
+    #    self.log.info("pass up init")
+    #    self.callback: typing.Callable[
+    #        [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
+    #    ] = callback
+
+    #    # default_addr=None means use connected address from socket
+    #    self.default_addr: _T_OPT_SOCKADDR = None
+
+    #def message_received(
+    #    self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
+    #) -> None:  # pragma: nocover
+    #    """
+    #    called when a well-formed SOME/IP datagram was received
+    #    """
+    #    self.log.info("pass up message received")
+    #    print("pass up mesage received")
+    #    self.log.info("pass up tcp received from %s\n%s", format_address(addr), someip_message)
+    #    self.callback(someip_message, addr, False)
+
+
+    #def connection_lost(self, transport):
+    #    print("pass up server connection lost")
 
 
 class SOMEIPDatagramProtocol:
@@ -270,6 +349,7 @@ class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
         self,
         callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
         logger: str = "someip",
+        **kwargs
     ):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
@@ -290,7 +370,7 @@ class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
         """
         called when a well-formed SOME/IP datagram was received
         """
-        self.log.info("received from %s\n%s", format_address(addr), someip_message)
+        self.log.info("pass up udp received from %s\n%s", format_address(addr), someip_message)
         self.callback(someip_message, addr, multicast)
 
 
@@ -1188,11 +1268,17 @@ class EventgroupSubscription:
     def from_subscribe_entry(cls, entry: someip.header.SOMEIPSDEntry):
         endpoints = []
         options = []
+
+        llog = logging.getLogger("eg sub")
+
         for option in entry.options:
             if isinstance(option, someip.header.EndpointOption):
                 endpoints.append(option)
             else:
                 options.append(option)
+
+        #llog.info(f"endpoint: {endpoints}")
+        #llog.info(f"options: {options}")
 
         return cls(
             service_id=entry.service_id,

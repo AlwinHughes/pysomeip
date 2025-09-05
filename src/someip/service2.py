@@ -20,7 +20,7 @@ class MalformedMessageError(Exception):
     pass
 
 
-class SimpleEventgroup:
+class SimpleEventgroup2:
     """
     set :attr:`values` to the current value, call :meth:`notify_once` to immediately
     notify subscribers about new value.
@@ -37,7 +37,8 @@ class SimpleEventgroup:
         """
         self.id = id
         self.service = service
-        self.log = service.log.getChild(f"evgrp-{id:04x}")
+        #self.log = service.log.getChild(f"evgrp-{id:04x}")
+        self.log = logging.getLogger("event-group")
 
         self.subscribed_endpoints: typing.Set[header.EndpointOption[typing.Any]] = set()
 
@@ -67,7 +68,7 @@ class SimpleEventgroup:
 
             self.log.info("%s notify 0x%04x to %r: %r", label, event_id, addr, payload)
 
-            _, session_id = self.service.session_storage.assign_outgoing(addr)
+            _, session_id = self.service.prot.session_storage.assign_outgoing(addr)
             hdr = header.SOMEIPHeader(
                 service_id=self.service.service_id,
                 method_id=0x8000 | event_id,
@@ -81,7 +82,7 @@ class SimpleEventgroup:
             msgbuf += hdr.build()
 
         if msgbuf:
-            self.service.send(msgbuf, addr)
+            self.service.prot.send(msgbuf, addr)
 
     @utils.log_exceptions()
     async def _notify_all(self, events: typing.Iterable[int], label: str):
@@ -126,12 +127,16 @@ class SimpleEventgroup:
 
         Triggers a notification of the current value to be sent to the subscriber.
         """
+        self.log.info(f"received sub to endpoint: {endpoint.address}")
         self.subscribed_endpoints.add(endpoint)
         self.has_clients.set()
         # send initial eventgroup notification
         asyncio.create_task(
             self._notify_single(endpoint, events=self.values.keys(), label="initial")
         )
+        #self.log.info(f"received sub to endpoint dir: {dir(endpoint)}")
+        #self.log.info(f"received : {endpoint.address}")
+        
 
     def unsubscribe(self, endpoint: header.EndpointOption[typing.Any]) -> None:
         """
@@ -165,7 +170,7 @@ class SimpleService2(sd.ServerServiceListener):
         self.clients: typing.DefaultDict[
             int, typing.Set[sd.EventgroupSubscription]
         ] = collections.defaultdict(set)
-        self.eventgroups: typing.Dict[int, SimpleEventgroup] = {}
+        self.eventgroups: typing.Dict[int, SimpleEventgroup2] = {}
         self.methods: typing.Dict[int, _T_METHOD_HANDLER] = {}
         self.instance_id: int = instance_id
         self.log = logging.getLogger("service2")
@@ -184,13 +189,15 @@ class SimpleService2(sd.ServerServiceListener):
         **kwargs,
     ):
 
-        self = cls(instance_id, announcer, reliable)
+        self = cls(instance_id, announcer, reliable, **kwargs)
 
         if reliable:
             trans, prot = await sd.PassUpSOMEIPTCPServer.create_unicast_endpoint(
                     local_addr=local_addr,
+                    #alwin_callback = None 
+                    #alwin_callback=lambda x,y: print("callback!!!!"),
                     callback=self.message_received,
-                    **kwargs)
+                    )
             self.prot = prot
             self.transport = trans
         else:
@@ -220,7 +227,7 @@ class SimpleService2(sd.ServerServiceListener):
             raise KeyError(f"method with id {id:#x} already registered on {self}")
         self.methods[id] = handler
 
-    def register_eventgroup(self, eventgroup: SimpleEventgroup) -> None:
+    def register_eventgroup(self, eventgroup: SimpleEventgroup2) -> None:
         """
         register an eventgroup on this service. Incoming subscriptions will be
         handled and passed to the given eventgroup.
@@ -271,8 +278,9 @@ class SimpleService2(sd.ServerServiceListener):
         self,
         someip_message: header.SOMEIPHeader,
         addr: header._T_SOCKNAME,
-        multicast: bool,
+        multicast : bool
     ) -> None:
+        self.log.info(f"callback!!!!!!!! {someip_message}")
         if multicast:
             warnings.warn(
                 "Service packet received over multicast - this does not make sense."
@@ -358,7 +366,7 @@ class SimpleService2(sd.ServerServiceListener):
             return_code=return_code,
             payload=b"",
         )
-        self.send(resp.build(), addr)
+        self.prot.send(resp.build(), addr)
 
     def send_positive_response(
         self,
@@ -369,7 +377,7 @@ class SimpleService2(sd.ServerServiceListener):
         resp = dataclasses.replace(
             msg, message_type=header.SOMEIPMessageType.RESPONSE, payload=payload
         )
-        self.send(resp.build(), addr)
+        self.prot.send(resp.build(), addr)
 
     def client_subscribed(
         self,
@@ -411,5 +419,4 @@ class SimpleService2(sd.ServerServiceListener):
             self.log.info("client_unsubscribed from %r: %s", source, subscription)
         except KeyError:
             self.log.warning(
-                "client_unsubscribed unknown from %r: %s", source, subscription
-            )
+                "client_unsubscribed unknown from %r: %s", source, subscription)
