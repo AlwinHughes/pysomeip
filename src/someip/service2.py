@@ -4,11 +4,14 @@ import asyncio
 import collections
 import dataclasses
 import functools
-import warnings
-import typing
 import logging
+import typing
+import warnings
 
-from someip import header, config, sd, utils
+from someip import config
+from someip import header
+from someip import sd
+from someip import utils
 
 
 _T_METHOD_HANDLER = typing.Callable[
@@ -29,7 +32,7 @@ class SimpleEventgroup2:
     """
 
     def __init__(
-        self, service: SimpleService, id: int, interval: typing.Optional[float] = None
+        self, service: SimpleService2, id: int, interval: typing.Optional[float] = None
     ):
         """
         :param service: the service this group belongs to
@@ -37,7 +40,7 @@ class SimpleEventgroup2:
         """
         self.id = id
         self.service = service
-        #self.log = service.log.getChild(f"evgrp-{id:04x}")
+        # self.log = service.log.getChild(f"evgrp-{id:04x}")
         self.log = logging.getLogger("event-group")
 
         self.subscribed_endpoints: typing.Set[header.EndpointOption[typing.Any]] = set()
@@ -122,7 +125,7 @@ class SimpleEventgroup2:
 
     def subscribe(self, endpoint: header.EndpointOption[typing.Any]) -> None:
         """
-        Called by :class:`SimpleService` when a new subscription for this eventgroup
+        Called by :class:`SimpleService2` when a new subscription for this eventgroup
         was received.
 
         Triggers a notification of the current value to be sent to the subscriber.
@@ -134,13 +137,12 @@ class SimpleEventgroup2:
         asyncio.create_task(
             self._notify_single(endpoint, events=self.values.keys(), label="initial")
         )
-        #self.log.info(f"received sub to endpoint dir: {dir(endpoint)}")
-        #self.log.info(f"received : {endpoint.address}")
-        
+        # self.log.info(f"received sub to endpoint dir: {dir(endpoint)}")
+        # self.log.info(f"received : {endpoint.address}")
 
     def unsubscribe(self, endpoint: header.EndpointOption[typing.Any]) -> None:
         """
-        Called by :class:`SimpleService` when a subscription for this eventgroup
+        Called by :class:`SimpleService2` when a subscription for this eventgroup
         runs out.
         """
         self.subscribed_endpoints.remove(endpoint)
@@ -149,35 +151,35 @@ class SimpleEventgroup2:
 
 
 class SimpleService2(sd.ServerServiceListener):
-
     service_id: typing.ClassVar[int] = 0xAAAA
     version_major: typing.ClassVar[int] = 1
     version_minor: typing.ClassVar[int] = 1
 
     def __init__(
-            self,
-            instance_id: int, 
-            #protocol : typeing.Union[sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol],
-            announcer: sd.ServiceAnnouncer,
-            reliable: bool = False,
-            **kwargs
-            ):
+        self,
+        instance_id: int,
+        # protocol : typeing.Union[sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol],
+        announcer: sd.ServiceAnnouncer,
+        reliable: bool = False,
+        **kwargs,
+    ):
         """
         override, call super().__init__() followed by :meth:`register_method`
         and :meth:`register_cyclic_eventgroup`
         """
         super().__init__()
-        self.clients: typing.DefaultDict[
-            int, typing.Set[sd.EventgroupSubscription]
-        ] = collections.defaultdict(set)
+        self.clients: typing.DefaultDict[int, typing.Set[sd.EventgroupSubscription]] = (
+            collections.defaultdict(set)
+        )
         self.eventgroups: typing.Dict[int, SimpleEventgroup2] = {}
         self.methods: typing.Dict[int, _T_METHOD_HANDLER] = {}
         self.instance_id: int = instance_id
         self.log = logging.getLogger("service2")
         self.reliable: bool = reliable
-        self.prot : typeing.Union[sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol, None] = None
+        self.prot: typing.Union[
+            sd.SOMEIPDatagramProtocol, sd.SOMEIPTCPServerProtocol, None
+        ] = None
         self.transport = None
-
 
     @classmethod
     async def start(
@@ -185,31 +187,26 @@ class SimpleService2(sd.ServerServiceListener):
         instance_id: int,
         announcer: sd.ServiceAnnouncer,
         local_addr: sd._T_OPT_SOCKADDR = None,
-        reliable : bool = False,
+        reliable: bool = False,
         **kwargs,
     ):
-
         self = cls(instance_id, announcer, reliable, **kwargs)
 
         if reliable:
             trans, prot = await sd.PassUpSOMEIPTCPServer.create_unicast_endpoint(
-                    local_addr=local_addr,
-                    #alwin_callback = None 
-                    #alwin_callback=lambda x,y: print("callback!!!!"),
-                    callback=self.message_received,
-                    )
+                local_addr=local_addr,
+                callback=self.message_received,
+            )
             self.prot = prot
             self.transport = trans
         else:
             trans, prot = await sd.PassUpSOMEIPDatagramProtocol.create_unicast_endpoint(
-                    local_addr=local_addr,
-                    callback = self.message_received,
-                    **kwargs)
+                local_addr=local_addr, callback=self.message_received, **kwargs
+            )
             self.prot = prot
             self.transport = trans
         self.start_announce(announcer)
         return self
-
 
     def register_method(self, id: int, handler: _T_METHOD_HANDLER) -> None:
         """
@@ -244,10 +241,14 @@ class SimpleService2(sd.ServerServiceListener):
     def _endpoint(self) -> header.SOMEIPSDOption:
         if self.reliable:
             sockname = self.transport.sockets[0].getsockname()
-            return config.Eventgroup._sockaddr_to_endpoint(sockname, header.L4Protocols.TCP)
-        else: 
+            return config.Eventgroup._sockaddr_to_endpoint(
+                sockname, header.L4Protocols.TCP
+            )
+        else:
             sockname = self.transport.get_extra_info("sockname")
-            return config.Eventgroup._sockaddr_to_endpoint(sockname, header.L4Protocols.UDP)
+            return config.Eventgroup._sockaddr_to_endpoint(
+                sockname, header.L4Protocols.UDP
+            )
 
     def as_config(self):
         return config.Service(
@@ -257,10 +258,8 @@ class SimpleService2(sd.ServerServiceListener):
             self.version_minor,
             options_1=(self._endpoint,),
             eventgroups=frozenset(self.eventgroups.keys()),
-            reliable = self.reliable
+            reliable=self.reliable,
         )
-
-
 
     def start_announce(self, announcer: sd.ServiceAnnouncer):
         self.service_instance = sd.ServiceInstance(
@@ -278,7 +277,7 @@ class SimpleService2(sd.ServerServiceListener):
         self,
         someip_message: header.SOMEIPHeader,
         addr: header._T_SOCKNAME,
-        multicast : bool
+        multicast: bool,
     ) -> None:
         self.log.info(f"callback!!!!!!!! {someip_message}")
         if multicast:
@@ -419,4 +418,5 @@ class SimpleService2(sd.ServerServiceListener):
             self.log.info("client_unsubscribed from %r: %s", source, subscription)
         except KeyError:
             self.log.warning(
-                "client_unsubscribed unknown from %r: %s", source, subscription)
+                "client_unsubscribed unknown from %r: %s", source, subscription
+            )

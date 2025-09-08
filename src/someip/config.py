@@ -187,18 +187,12 @@ class Service:
         ):
             return False
 
-        print("self")
-        print(self)
-
-        print("options_1")
-        print(entry.options_1)
         a = [
             not bool((option.l4proto == someip.header.L4Protocols.TCP) ^ self.reliable)
             for option in entry.options_1
             if isinstance(option, someip.header.IPv4EndpointOption)
             or isinstance(option, someip.header.IPv6EndpointOption)
         ]
-        print(a)
 
         if not any(a):
             print("reliability didn't match")

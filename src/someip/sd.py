@@ -55,11 +55,9 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
     ip_to_protocol = dict()
 
     def __init__(self, logger: str = "someip-tcp"):
-    #def __init__(self, logger: str = "someip-tcp"):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
-        #self.log.info("TCP server init")
 
     @classmethod
     async def create_unicast_endpoint(
@@ -82,16 +80,11 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
 
     def data_received(self, data):
         self.log.info("TCP server data received")
-        #self.log.info(f"TCP server data received self {self}")
-        #self.log.info(f"TCP server self: {dir(self)}")
-        #self.log.info(f"TCP server data trans: {self.conn_trans}")
-        #self.log.info(f"transport {self.transport}")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
 
         self.log.info(f"TCP server data received sock_name : {self.conn_trans.get_extra_info('sockname')}")
         self.log.info(f"TCP server data received peer_name : {self.conn_trans.get_extra_info('peername')}")
         self.message_received(parsed, self.conn_trans.get_extra_info("sockname"), False)
-        #self.message_received(parsed, self.transport.sockets[0].laddr, False)
 
     def message_received(
         self,
@@ -115,28 +108,18 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         self.conn_trans = transport
 
     def connection_lost(self, transport):
-        #self.log.info(f"server connection lost: {transport.get_extra_info('sockname')}")
         self.log.info(f"server connection lost")
-        #self.ip_to_protocol.pop(transport.get_extra_info("sockname"))
 
     def close_transport(self):
         self.transport.close()
 
     def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
-        #self.log.info(f"send self self: {self}")
         self.log.info(f"ip_to_proto: {self.ip_to_protocol}")
-        #self.log.info(f"TTransport: {self.transport}")
-        #self.log.info(f"TTransport dir: {dir(self.transport)}")
-        #self.log.info(f"TTransport sockets: {self.transport.sockets[0]}")
-        #self.log.info(f"TTransport sockets dir: {dir(self.transport.sockets[0])}")
         if remote is None:
             self.log.warn("remote addr is None, not sending")
             return
         self.log.warn(f"remote addr is {remote}")
         self.ip_to_protocol[remote].write(buf)
-        #self.transport.sockets[0].write(buf)
-        #self.transport.write(buf)
-        #self.transport2.write(buf)
 
 
 class SOMEIPTCPClient:
@@ -158,14 +141,14 @@ class SOMEIPTCPClient:
             loop = asyncio.get_event_loop()
         # protocol = cls(*args, **kwargs)
         transport, protocol = await loop.create_connection(
-            lambda: SOMEIPTCPClient(), remote_addr[0], remote_addr[1]
+            lambda: cls(*args, **kwargs), remote_addr[0], remote_addr[1]
         )
         protocol.transport = transport
         return transport, protocol
 
     def connection_made(self, transport):
         print("client connection made")
-        self.transport = transport
+        self.conn_transport = transport
 
     def connection_lost(self, transport):
         print("client connection lost")
@@ -1276,9 +1259,6 @@ class EventgroupSubscription:
                 endpoints.append(option)
             else:
                 options.append(option)
-
-        #llog.info(f"endpoint: {endpoints}")
-        #llog.info(f"options: {options}")
 
         return cls(
             service_id=entry.service_id,
