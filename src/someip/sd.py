@@ -51,10 +51,9 @@ def format_address(addr: _T_SOCKADDR) -> str:
 
 
 class SOMEIPTCPServerProtocol(asyncio.Protocol):
-
     ip_to_protocol = dict()
 
-    def __init__(self, logger: str = "someip-tcp"):
+    def __init__(self, logger: str = "someip-tcp-server"):
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
@@ -71,8 +70,7 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
             loop = asyncio.get_event_loop()
         protocol = cls(*args, **kwargs)
         transport = await loop.create_server(
-            lambda : cls(*args, **kwargs),
-            local_addr[0], local_addr[1]
+            lambda: cls(*args, **kwargs), local_addr[0], local_addr[1]
         )
         protocol.log.info(f"init transport: {transport}")
         protocol.transport = transport
@@ -82,15 +80,19 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         self.log.info("TCP server data received")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
 
-        self.log.info(f"TCP server data received sock_name : {self.conn_trans.get_extra_info('sockname')}")
-        self.log.info(f"TCP server data received peer_name : {self.conn_trans.get_extra_info('peername')}")
+        self.log.info(
+            f"TCP server data received sock_name : {self.conn_trans.get_extra_info('sockname')}"
+        )
+        self.log.info(
+            f"TCP server data received peer_name : {self.conn_trans.get_extra_info('peername')}"
+        )
         self.message_received(parsed, self.conn_trans.get_extra_info("sockname"), False)
 
     def message_received(
         self,
         someip_message: someip.header.SOMEIPHeader,
         addr: _T_SOCKADDR,
-        multicast: bool
+        multicast: bool,
     ) -> None:  # pragma: nocover
         """
         called when a well-formed SOME/IP datagram was received
@@ -100,15 +102,19 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.log.info(f"server connection made t2: {transport}")
-        self.log.info(f"server connection socket name : {transport.get_extra_info('sockname')}")
-        self.log.info(f"server connection peer name  : {transport.get_extra_info('peername')}")
+        self.log.info(
+            f"server connection socket name : {transport.get_extra_info('sockname')}"
+        )
+        self.log.info(
+            f"server connection peer name  : {transport.get_extra_info('peername')}"
+        )
 
         self.ip_to_protocol[transport.get_extra_info("sockname")] = transport
         self.ip_to_protocol[transport.get_extra_info("peername")] = transport
         self.conn_trans = transport
 
     def connection_lost(self, transport):
-        self.log.info(f"server connection lost")
+        self.log.info("server connection lost")
 
     def close_transport(self):
         self.transport.close()
@@ -122,8 +128,9 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         self.ip_to_protocol[remote].write(buf)
 
 
-class SOMEIPTCPClient:
-    def __init__(self, logger: str = "someip-tcp"):
+class SOMEIPTCPClientProtocol:
+    def __init__(self, logger: str = "someip-tcp-client", **kwargs):
+        #super().__init__(logger, **kwargs)
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
@@ -148,16 +155,15 @@ class SOMEIPTCPClient:
 
     def connection_made(self, transport):
         print("client connection made")
-        self.conn_transport = transport
+        self.conn_trans = transport
 
     def connection_lost(self, transport):
         print("client connection lost")
 
     def data_received(self, data):
-        message = data.decode()
-        print("data recived: {message}")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
-        self.message_received(parsed, addr, multicast)
+        addr = self.conn_trans.get_extra_info("sockname")
+        self.message_received(parsed, addr, False)
 
     def eof_received(self):
         print("eof received")
@@ -171,13 +177,14 @@ class SOMEIPTCPClient:
         self.log.info("tcp received from %s\n%s", format_address(addr), someip_message)
         pass
 
+    def send(self, payload: bytes):
+        self.transport.write(payload)
+
 
 class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
-
-    def __init__(self, callback, logger: str = "someip-tcp", **kwargs):
-    #def __init__(self, logger: str = "someip-tcp", **kwargs):
-        self.log = logging.getLogger(logger)
-        self.transport: asyncio.DatagramTransport
+    def __init__(self, callback, **kwargs):
+        super().__init__(**kwargs)
+        # self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
         self.log.info("TCP pass up server init")
 
@@ -185,12 +192,11 @@ class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
             [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
         ] = callback
 
-
     def message_received(
         self,
         someip_message: someip.header.SOMEIPHeader,
         addr: _T_SOCKADDR,
-        multicast: bool
+        multicast: bool,
     ) -> None:  # pragma: nocover
         """
         called when a well-formed SOME/IP datagram was received
@@ -199,45 +205,28 @@ class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
         self.callback(someip_message, addr, multicast)
 
 
-    def close_transport(self):
-        print("close transport")
-        #self.transport.close()
+class PassUpSOMEIPTCPClient(SOMEIPTCPClientProtocol):
+    def __init__(self, callback, **kwargs):
+        super().__init__(**kwargs)
+        # self.transport: asyncio.DatagramTransport
+        # self.session_storage = _SessionStorage()
+        self.log.info("TCP pass up client init")
 
-    #def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
-    #    self.transport.write(buf)
-    #def __init__(
-    #    self,
-    #    callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
-    #  #  logger: str = "someip-tcp",
-    #    *args,
-    #    **kwargs
-    #):
-    #    #self.log = logging.getLogger(logger)
-    #    #self.transport: asyncio.DatagramTransport
-    #    #self.session_storage = _SessionStorage()
-    #    super().__init__()
-    #    self.log.info("pass up init")
-    #    self.callback: typing.Callable[
-    #        [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
-    #    ] = callback
+        self.callback: typing.Callable[
+            [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
+        ] = callback
 
-    #    # default_addr=None means use connected address from socket
-    #    self.default_addr: _T_OPT_SOCKADDR = None
-
-    #def message_received(
-    #    self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
-    #) -> None:  # pragma: nocover
-    #    """
-    #    called when a well-formed SOME/IP datagram was received
-    #    """
-    #    self.log.info("pass up message received")
-    #    print("pass up mesage received")
-    #    self.log.info("pass up tcp received from %s\n%s", format_address(addr), someip_message)
-    #    self.callback(someip_message, addr, False)
-
-
-    #def connection_lost(self, transport):
-    #    print("pass up server connection lost")
+    def message_received(
+        self,
+        someip_message: someip.header.SOMEIPHeader,
+        addr: _T_SOCKADDR,
+        multicast: bool,
+    ) -> None:  # pragma: nocover
+        """
+        called when a well-formed SOME/IP datagram was received
+        """
+        self.log.info("received %s", someip_message)
+        self.callback(someip_message, addr, multicast)
 
 
 class SOMEIPDatagramProtocol:
@@ -331,10 +320,10 @@ class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
     def __init__(
         self,
         callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
-        logger: str = "someip",
-        **kwargs
+        #logger: str = "someip",
+        **kwargs,
     ):
-        self.log = logging.getLogger(logger)
+        super().__init__(**kwargs)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
         self.callback: typing.Callable[
@@ -353,7 +342,9 @@ class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
         """
         called when a well-formed SOME/IP datagram was received
         """
-        self.log.info("pass up udp received from %s\n%s", format_address(addr), someip_message)
+        self.log.info(
+            "pass up udp received from %s\n%s", format_address(addr), someip_message
+        )
         self.callback(someip_message, addr, multicast)
 
 
@@ -1101,6 +1092,7 @@ class ServiceDiscover:
     def watch_service(
         self, service: someip.config.Service, listener: ClientServiceListener
     ) -> None:
+        self.log.info(f"watching: {service}")
         self.watched_services[service].add(listener)
 
         for addr, services in self.found_services.store.items():
@@ -1251,8 +1243,6 @@ class EventgroupSubscription:
     def from_subscribe_entry(cls, entry: someip.header.SOMEIPSDEntry):
         endpoints = []
         options = []
-
-        llog = logging.getLogger("eg sub")
 
         for option in entry.options:
             if isinstance(option, someip.header.EndpointOption):
