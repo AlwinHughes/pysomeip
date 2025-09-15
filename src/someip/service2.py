@@ -41,7 +41,7 @@ class SimpleEventgroup2:
         self.id = id
         self.service = service
         # self.log = service.log.getChild(f"evgrp-{id:04x}")
-        self.log = logging.getLogger("event-group")
+        self.log = logging.getLogger("event-group2")
 
         self.subscribed_endpoints: typing.Set[header.EndpointOption[typing.Any]] = set()
 
@@ -201,7 +201,7 @@ class SimpleService2(sd.ServerServiceListener):
             self.transport = trans
         else:
             trans, prot = await sd.PassUpSOMEIPDatagramProtocol.create_unicast_endpoint(
-                local_addr=local_addr, callback=self.message_received, **kwargs
+                local_addr=local_addr, callback=self.message_received
             )
             self.prot = prot
             self.transport = trans

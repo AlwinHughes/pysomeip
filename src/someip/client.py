@@ -68,7 +68,7 @@ class SimpleClient(sd.ClientServiceListener):
 
 
     def stop_find(self):
-        self.discovery.stop_watch_service(config.Service(self.service_id), self)
+        self.discovery.stop_watch_service(config.Service(service_id=self.service_id, reliable=self.reliable), self)
         if self.transport is not None:
             self.transport.close()
 

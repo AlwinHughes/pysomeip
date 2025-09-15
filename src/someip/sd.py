@@ -77,16 +77,8 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         return transport, protocol
 
     def data_received(self, data):
-        self.log.info("TCP server data received")
         parsed, data = someip.header.SOMEIPHeader.parse(data)
-
-        self.log.info(
-            f"TCP server data received sock_name : {self.conn_trans.get_extra_info('sockname')}"
-        )
-        self.log.info(
-            f"TCP server data received peer_name : {self.conn_trans.get_extra_info('peername')}"
-        )
-        self.message_received(parsed, self.conn_trans.get_extra_info("sockname"), False)
+        self.message_received(parsed, self.conn_trans.get_extra_info("peername"), False)
 
     def message_received(
         self,
@@ -101,36 +93,25 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         pass
 
     def connection_made(self, transport):
-        self.log.info(f"server connection made t2: {transport}")
-        self.log.info(
-            f"server connection socket name : {transport.get_extra_info('sockname')}"
-        )
-        self.log.info(
-            f"server connection peer name  : {transport.get_extra_info('peername')}"
-        )
-
-        self.ip_to_protocol[transport.get_extra_info("sockname")] = transport
         self.ip_to_protocol[transport.get_extra_info("peername")] = transport
         self.conn_trans = transport
 
     def connection_lost(self, transport):
+        self.ip_to_protocol.pop(self.conn_trans.get_extra_info('peername'))
         self.log.info("server connection lost")
 
     def close_transport(self):
         self.transport.close()
 
     def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
-        self.log.info(f"ip_to_proto: {self.ip_to_protocol}")
         if remote is None:
             self.log.warn("remote addr is None, not sending")
             return
-        self.log.warn(f"remote addr is {remote}")
         self.ip_to_protocol[remote].write(buf)
 
 
-class SOMEIPTCPClientProtocol:
+class SOMEIPTCPClientProtocol(asyncio.Protocol):
     def __init__(self, logger: str = "someip-tcp-client", **kwargs):
-        #super().__init__(logger, **kwargs)
         self.log = logging.getLogger(logger)
         self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
@@ -138,7 +119,6 @@ class SOMEIPTCPClientProtocol:
     @classmethod
     async def create_unicast_endpoint(
         cls,
-        # local_addr: _T_OPT_SOCKADDR,
         remote_addr: _T_OPT_SOCKADDR,
         loop=None,
         *args,
@@ -154,19 +134,16 @@ class SOMEIPTCPClientProtocol:
         return transport, protocol
 
     def connection_made(self, transport):
-        print("client connection made")
+        self.log.info("client connection made")
         self.conn_trans = transport
 
     def connection_lost(self, transport):
-        print("client connection lost")
+        self.log.info("client connection lost")
 
     def data_received(self, data):
         parsed, data = someip.header.SOMEIPHeader.parse(data)
         addr = self.conn_trans.get_extra_info("sockname")
         self.message_received(parsed, addr, False)
-
-    def eof_received(self):
-        print("eof received")
 
     def message_received(
         self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
@@ -184,9 +161,7 @@ class SOMEIPTCPClientProtocol:
 class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
     def __init__(self, callback, **kwargs):
         super().__init__(**kwargs)
-        # self.transport: asyncio.DatagramTransport
         self.session_storage = _SessionStorage()
-        self.log.info("TCP pass up server init")
 
         self.callback: typing.Callable[
             [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
@@ -208,9 +183,6 @@ class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
 class PassUpSOMEIPTCPClient(SOMEIPTCPClientProtocol):
     def __init__(self, callback, **kwargs):
         super().__init__(**kwargs)
-        # self.transport: asyncio.DatagramTransport
-        # self.session_storage = _SessionStorage()
-        self.log.info("TCP pass up client init")
 
         self.callback: typing.Callable[
             [someip.header.SOMEIPHeader, _T_SOCKADDR, bool]
@@ -320,7 +292,6 @@ class PassUpSOMEIPDatagramProtocol(SOMEIPDatagramProtocol):
     def __init__(
         self,
         callback: typing.Callable[[someip.header.SOMEIPHeader, _T_SOCKADDR, bool]],
-        #logger: str = "someip",
         **kwargs,
     ):
         super().__init__(**kwargs)
