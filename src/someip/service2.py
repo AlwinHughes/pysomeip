@@ -65,7 +65,7 @@ class SimpleEventgroup2:
     ) -> None:
         addr = await endpoint.addrinfo()
 
-        msgbuf = bytearray()
+        #msgbuf = bytearray()
         for event_id in events:
             payload = self.values[event_id]
 
@@ -82,10 +82,8 @@ class SimpleEventgroup2:
                 payload=payload,
             )
 
-            msgbuf += hdr.build()
+            self.service.prot.send_msg(hdr, addr)
 
-        if msgbuf:
-            self.service.prot.send(msgbuf, addr)
 
     @utils.log_exceptions()
     async def _notify_all(self, events: typing.Iterable[int], label: str):

@@ -96,7 +96,7 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
     @classmethod
     async def create_unicast_endpoint(
         cls,
-        local_addr: _T_OPT_SOCKADDR,
+        local_addr: _T_SOCKADDR,
         loop=None,
         *args,
         **kwargs,
@@ -138,11 +138,16 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
     def close_transport(self):
         self.transport.close()
 
-    def send(self, buf: bytes, remote: _T_OPT_SOCKADDR = None):
+    def send(self, buf: bytes, remote: _T_SOCKADDR):
         if remote is None:
             self.log.warn("remote addr is None, not sending")
             return
         self.ip_to_protocol[remote].write(buf)
+
+
+    def send_msg(self, msg: someip.header.SOMEIPHeader, remote: _T_SOCKADDR):
+        self.send(msg.build(), remote)
+        
 
 
 class SOMEIPTCPClientProtocol(asyncio.Protocol):
@@ -191,6 +196,9 @@ class SOMEIPTCPClientProtocol(asyncio.Protocol):
 
     def send(self, payload: bytes):
         self.transport.write(payload)
+
+    def send_msg(self, msg: someip.header.SOMEIPHeader):
+        self.send(msg.build())
 
 
 class PassUpSOMEIPTCPServer(SOMEIPTCPServerProtocol):
@@ -385,7 +393,10 @@ class SOMEIPDatagramProtocol:
         if len(msg.payload) <= MAX_PAYLOAD_SIZE:
             self.send(msg.build(), remote)
         else:
-            for msg in segment_msg(msg):
+            self.log.warn("someip tp required!")
+            for index, msg in enumerate(segment_msg(msg)):
+                self.log.info(f"sending tp segment {index}")
+                self.log.info(f"sending tp segment {msg.build()}")
                 self.send(msg.build(), remote)
 
 
