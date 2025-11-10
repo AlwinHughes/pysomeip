@@ -112,8 +112,12 @@ class SOMEIPTCPServerProtocol(asyncio.Protocol):
         return transport, protocol
 
     def data_received(self, data):
-        parsed, data = someip.header.SOMEIPHeader.parse(data)
-        self.message_received(parsed, self.conn_trans.get_extra_info("peername"), False)
+
+        while data:
+            # 4.2.1, TR_SOMEIP_00140 more than one SOMEIP message per UDP frame
+            # allowed
+            parsed, data = someip.header.SOMEIPHeader.parse(data)
+            self.message_received(parsed, self.conn_trans.get_extra_info("peername"), False)
 
     def message_received(
         self,
@@ -181,9 +185,11 @@ class SOMEIPTCPClientProtocol(asyncio.Protocol):
         self.log.info("client connection lost")
 
     def data_received(self, data):
-        parsed, data = someip.header.SOMEIPHeader.parse(data)
-        addr = self.conn_trans.get_extra_info("sockname")
-        self.message_received(parsed, addr, False)
+
+        while data:
+            parsed, data = someip.header.SOMEIPHeader.parse(data)
+            addr = self.conn_trans.get_extra_info("sockname")
+            self.message_received(parsed, addr, False)
 
     def message_received(
         self, someip_message: someip.header.SOMEIPHeader, addr: _T_SOCKADDR
